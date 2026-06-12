@@ -19,6 +19,7 @@ public class ArrivalController {
     private final ArrivalItemRepository arrivalItemRepository;
     private final PurchaseOrderRepository orderRepository;
     private final PurchaseOrderItemRepository orderItemRepository;
+    private final StockInOrderRepository stockInOrderRepository;
 
     @PostMapping
     public ResponseEntity<?> create(
@@ -72,6 +73,11 @@ public class ArrivalController {
         Map<String, Object> result = new HashMap<>();
         result.put("arrivalRecord", saved);
         result.put("items", items);
+        if ("合格".equals(inspectionResult)) {
+            result.put("nextAction", "质检合格，请调用 POST /api/stock-in/from-arrival/" + saved.getId() + " 生成入库单");
+        } else {
+            result.put("nextAction", "质检不合格，已登记到货台账，无法入库");
+        }
         return ResponseEntity.status(HttpStatus.CREATED).body(result);
     }
 
@@ -102,9 +108,12 @@ public class ArrivalController {
     public ResponseEntity<?> getById(@PathVariable Long id) {
         return arrivalRecordRepository.findById(id).map(record -> {
             List<ArrivalItem> items = arrivalItemRepository.findByArrivalId(record.getId());
+            List<StockInOrder> stockIns = stockInOrderRepository.findByArrivalId(record.getId());
             Map<String, Object> result = new HashMap<>();
             result.put("record", record);
             result.put("items", items);
+            result.put("stockInOrders", stockIns);
+            result.put("stockInCreated", !stockIns.isEmpty());
             return ResponseEntity.ok((Object) result);
         }).orElse(ResponseEntity.notFound().build());
     }

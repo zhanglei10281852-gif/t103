@@ -204,7 +204,8 @@ public class ProcurementStatsController {
 
         for (PurchaseRequest req : requests) {
             if (req.getApprovedAt() != null && req.getCreatedAt() != null) {
-                long hours = java.time.Duration.between(req.getCreatedAt(), req.getApprovedAt()).toHours();
+                long minutes = java.time.Duration.between(req.getCreatedAt(), req.getApprovedAt()).toMinutes();
+                double hours = Math.round(minutes / 60.0 * 100.0) / 100.0;
                 Map<String, Object> item = new HashMap<>();
                 item.put("requestNo", req.getRequestNo());
                 item.put("department", req.getDepartment());
@@ -212,6 +213,7 @@ public class ProcurementStatsController {
                 item.put("status", req.getStatus());
                 item.put("createdAt", req.getCreatedAt());
                 item.put("approvedAt", req.getApprovedAt());
+                item.put("approvalMinutes", minutes);
                 item.put("approvalHours", hours);
                 result.add(item);
                 totalHours += hours;

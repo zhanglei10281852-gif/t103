@@ -3,18 +3,17 @@ package com.company.material.entity;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.math.BigDecimal;
-import java.time.LocalDate;
 
 @Data
 @Entity
-@Table(name = "purchase_request_items")
-public class PurchaseRequestItem {
+@Table(name = "stock_in_items")
+public class StockInItem {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Column(nullable = false)
-    private Long requestId;
+    private Long stockInId;
 
     @Column(nullable = false)
     private Long materialId;
@@ -31,14 +30,6 @@ public class PurchaseRequestItem {
     @Column(length = 20)
     private String unit;
 
-    private LocalDate expectedDate;
-
-    @Column(length = 200)
-    private String purpose;
-
     @Column(precision = 12, scale = 2)
-    private BigDecimal referencePrice;
-
-    @Column(precision = 12, scale = 2)
-    private BigDecimal orderedQuantity;
+    private BigDecimal unitPrice;
 }

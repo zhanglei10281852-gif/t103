@@ -26,6 +26,7 @@ public class PurchaseOrderController {
     private final PurchaseOrderItemRepository orderItemRepository;
     private final PurchaseRequestRepository requestRepository;
     private final PurchaseRequestItemRepository requestItemRepository;
+    private final PurchaseOrderRequestLinkRepository orderRequestLinkRepository;
     private final SupplierRepository supplierRepository;
     private final SupplierQuotationRepository quotationRepository;
     private final MaterialRepository materialRepository;
@@ -54,8 +55,11 @@ public class PurchaseOrderController {
 
         for (Long reqId : requestIds) {
             PurchaseRequest req = requestRepository.findById(reqId).orElse(null);
-            if (req == null || !"已批准".equals(req.getStatus())) {
-                return ResponseEntity.badRequest().body(Map.of("error", "采购申请" + reqId + "不存在或未批准"));
+            if (req == null) {
+                return ResponseEntity.badRequest().body(Map.of("error", "采购申请" + reqId + "不存在"));
+            }
+            if (!"已批准".equals(req.getStatus()) && !"部分转订".equals(req.getStatus()) && !"已转订单".equals(req.getStatus())) {
+                return ResponseEntity.badRequest().body(Map.of("error", "采购申请" + reqId + "状态错误，需要已批准或部分转订或已转订单"));
             }
         }
 
@@ -119,11 +123,12 @@ public class PurchaseOrderController {
         }
 
         for (Long reqId : requestIds) {
-            PurchaseRequest req = requestRepository.findById(reqId).orElse(null);
-            if (req != null) {
-                req.setStatus("已转订单");
-                requestRepository.save(req);
-            }
+            PurchaseOrderRequestLink link = new PurchaseOrderRequestLink();
+            link.setOrderId(saved.getId());
+            link.setRequestId(reqId);
+            orderRequestLinkRepository.save(link);
+
+            updateRequestOrderedStatus(reqId);
         }
 
         Map<String, Object> result = new HashMap<>();
@@ -159,9 +164,12 @@ public class PurchaseOrderController {
     public ResponseEntity<?> getById(@PathVariable Long id) {
         return orderRepository.findById(id).map(order -> {
             List<PurchaseOrderItem> items = orderItemRepository.findByOrderId(order.getId());
+            List<PurchaseOrderRequestLink> links = orderRequestLinkRepository.findByOrderId(order.getId());
+            List<Long> requestIds = links.stream().map(PurchaseOrderRequestLink::getRequestId).collect(Collectors.toList());
             Map<String, Object> result = new HashMap<>();
             result.put("order", order);
             result.put("items", items);
+            result.put("linkedRequestIds", requestIds);
             return ResponseEntity.ok((Object) result);
         }).orElse(ResponseEntity.notFound().build());
     }
@@ -252,8 +260,16 @@ public class PurchaseOrderController {
 
     @GetMapping("/from-requests")
     public ResponseEntity<?> getApprovedRequests() {
-        List<PurchaseRequest> approved = requestRepository.findByStatusIn(Arrays.asList("已批准", "已转订单"));
-        return ResponseEntity.ok(approved);
+        List<PurchaseRequest> approved = requestRepository.findByStatusIn(Arrays.asList("已批准", "部分转订", "已转订单"));
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (PurchaseRequest req : approved) {
+            List<PurchaseRequestItem> items = requestItemRepository.findByRequestId(req.getId());
+            Map<String, Object> m = new HashMap<>();
+            m.put("request", req);
+            m.put("items", items);
+            result.add(m);
+        }
+        return ResponseEntity.ok(result);
     }
 
     @GetMapping("/supplier-quotations/{materialId}")
@@ -310,5 +326,41 @@ public class PurchaseOrderController {
             seq = Integer.parseInt(seqStr) + 1;
         }
         return prefix + String.format("%04d", seq);
+    }
+
+    private void updateRequestOrderedStatus(Long requestId) {
+        PurchaseRequest request = requestRepository.findById(requestId).orElse(null);
+        if (request == null) return;
+
+        List<PurchaseRequestItem> reqItems = requestItemRepository.findByRequestId(requestId);
+        List<PurchaseOrderRequestLink> links = orderRequestLinkRepository.findByRequestId(requestId);
+        List<Long> orderIds = links.stream().map(PurchaseOrderRequestLink::getOrderId).collect(Collectors.toList());
+
+        Map<Long, BigDecimal> orderedQtyByMaterial = new HashMap<>();
+        if (!orderIds.isEmpty()) {
+            List<PurchaseOrderItem> orderItems = orderItemRepository.findByOrderIdIn(orderIds);
+            for (PurchaseOrderItem oi : orderItems) {
+                orderedQtyByMaterial.merge(oi.getMaterialId(), oi.getQuantity(), BigDecimal::add);
+            }
+        }
+
+        boolean anyOrdered = false;
+        boolean allFullyOrdered = !reqItems.isEmpty();
+        for (PurchaseRequestItem ri : reqItems) {
+            BigDecimal ordered = orderedQtyByMaterial.getOrDefault(ri.getMaterialId(), BigDecimal.ZERO);
+            ri.setOrderedQuantity(ordered);
+            requestItemRepository.save(ri);
+            if (ordered.compareTo(BigDecimal.ZERO) > 0) anyOrdered = true;
+            if (ordered.compareTo(ri.getQuantity()) < 0) allFullyOrdered = false;
+        }
+
+        if (allFullyOrdered) {
+            request.setStatus("已转订单");
+        } else if (anyOrdered) {
+            request.setStatus("部分转订");
+        } else {
+            request.setStatus("已批准");
+        }
+        requestRepository.save(request);
     }
 }
