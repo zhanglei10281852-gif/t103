@@ -1,19 +1,15 @@
 package com.company.material.config;
 
-import com.company.material.entity.Material;
-import com.company.material.entity.Supplier;
-import com.company.material.entity.User;
-import com.company.material.entity.Warehouse;
-import com.company.material.repository.MaterialRepository;
-import com.company.material.repository.SupplierRepository;
-import com.company.material.repository.UserRepository;
-import com.company.material.repository.WarehouseRepository;
+import com.company.material.entity.*;
+import com.company.material.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Component
 @RequiredArgsConstructor
@@ -23,6 +19,11 @@ public class DataInitializer implements CommandLineRunner {
     private final MaterialRepository materialRepository;
     private final WarehouseRepository warehouseRepository;
     private final SupplierRepository supplierRepository;
+    private final PurchaseRequestRepository purchaseRequestRepository;
+    private final PurchaseRequestItemRepository purchaseRequestItemRepository;
+    private final PurchaseOrderRepository purchaseOrderRepository;
+    private final PurchaseOrderItemRepository purchaseOrderItemRepository;
+    private final SupplierQuotationRepository supplierQuotationRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Override
@@ -32,6 +33,9 @@ public class DataInitializer implements CommandLineRunner {
             createUser("wzhang", "123456", "张伟", "采购部", "采购员");
             createUser("limei", "123456", "李梅", "仓储部", "库管员");
             createUser("wangq", "123456", "王强", "生产部", "普通员工");
+            createUser("zhaol", "123456", "赵磊", "生产部", "部门主管");
+            createUser("liuf", "123456", "刘芳", "采购部", "部门主管");
+            createUser("chenm", "123456", "陈明", "总经办", "总经理");
         }
 
         if (warehouseRepository.count() == 0) {
@@ -52,6 +56,15 @@ public class DataInitializer implements CommandLineRunner {
             createMaterial("MAT0003", "三相异步电机", "电气设备", "台", "Y2-132M-4 7.5kW", new BigDecimal("1850.00"), 10);
             createMaterial("MAT0004", "液压油", "辅料", "桶", "L-HM46 200L", new BigDecimal("980.00"), 30);
             createMaterial("MAT0005", "劳保手套", "低值易耗", "副", "丁腈防滑", new BigDecimal("8.50"), 500);
+        }
+
+        if (supplierQuotationRepository.count() == 0) {
+            createQuotation(1L, "华东钢铁有限公司", 1L, "MAT0001", "热轧钢板", new BigDecimal("4100.00"));
+            createQuotation(1L, "华东钢铁有限公司", 4L, "MAT0004", "液压油", new BigDecimal("950.00"));
+            createQuotation(2L, "精密轴承制造厂", 2L, "MAT0002", "深沟球轴承", new BigDecimal("33.00"));
+            createQuotation(2L, "精密轴承制造厂", 3L, "MAT0003", "三相异步电机", new BigDecimal("1800.00"));
+            createQuotation(3L, "环球电气设备公司", 3L, "MAT0003", "三相异步电机", new BigDecimal("1780.00"));
+            createQuotation(3L, "环球电气设备公司", 5L, "MAT0005", "劳保手套", new BigDecimal("7.80"));
         }
     }
 
@@ -96,5 +109,16 @@ public class DataInitializer implements CommandLineRunner {
         m.setReferencePrice(price);
         m.setSafetyStock(safety);
         materialRepository.save(m);
+    }
+
+    private void createQuotation(Long supplierId, String supplierName, Long materialId, String materialCode, String materialName, BigDecimal price) {
+        SupplierQuotation q = new SupplierQuotation();
+        q.setSupplierId(supplierId);
+        q.setSupplierName(supplierName);
+        q.setMaterialId(materialId);
+        q.setMaterialCode(materialCode);
+        q.setMaterialName(materialName);
+        q.setQuotationPrice(price);
+        supplierQuotationRepository.save(q);
     }
 }
